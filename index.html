@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>Mosaic Field· Generative Art</title>
+  <title>Mosaic Field · Generative Art</title>
   <meta name="description" content="Mosaic — a seed-based generative system of 80 × 80 grids resolved as circular waves, checkers, blobs, rings, dots or swirls, then drawn as squares, circles or rotated tiles with a final luminous effect. A reproducible catalogue of computational textile compositions." />
   <meta name="theme-color" content="#0a0a0a" />
   <link rel="icon" type="image/svg+xml" href="images/fav.svg">
@@ -86,6 +86,7 @@
     .cover-sub { font-family: var(--serif); font-size: clamp(1.3rem, 1.9vw, 1.7rem); font-weight: 300; font-style: italic; line-height: 1.4; color: var(--text-dim); max-width: 500px; }
     .cover-desc { color: var(--text-dim); font-size: 13px; line-height: 1.8; max-width: 460px; }
     .cover-art { position: relative; aspect-ratio: 1; background: #000; border: 1px solid var(--line); overflow: hidden; max-width: 520px; margin-left: auto; width: 100%; }
+    
     .canvas-slot { position: absolute; inset: 0; overflow: hidden; }
     .canvas-slot canvas {
       display: block !important;
@@ -94,6 +95,7 @@
       width: 100% !important; height: 100% !important;
       max-width: 100% !important; max-height: 100% !important;
     }
+    
     .cover-foot { display: grid; grid-template-columns: repeat(3, 1fr); gap: 40px; padding-top: 32px; border-top: 1px solid var(--line); font-family: var(--mono); font-size: 10px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--text-faint); }
     .cover-foot .k { display: block; color: var(--gold-soft); margin-bottom: 8px; }
     .cover-foot .v { color: var(--text-dim); letter-spacing: 0.1em; line-height: 1.7; }
@@ -713,22 +715,6 @@
 <script>
 // ============================================================
 // MOSAIC FIELD — GENERATIVE THRESHOLDED TILES
-//
-// Same seed → many surfaces:
-//   • Cover, Plate, Frame — same seed
-//   • All 4 surfaces (Print, Scarf, Textile, Wall) — same seed
-//   • Archive — 8 unique seeds
-//
-// Rectangular surfaces tile the square composition to fill.
-//
-// Generative engine (preserved from source):
-//   • 80 × 80 grid, HSB colour mode
-//   • 6 patterns: circular waves, checker noise, organic blobs,
-//     concentric rings, random dots, swirl
-//   • Distance-varying threshold masks the pattern into a shape
-//   • 3 shapes: squares, circles, rotated squares
-//   • Coherent colour set: 2–5 hues spaced around base+180°
-//   • Final effect: glow dots, connecting lines, or cross patterns
 // ============================================================
 
 const prefix = 'Mosaic-Field';
@@ -758,13 +744,9 @@ const EFFECT_NAMES = ['Glow Dots', 'Connecting Lines', 'Cross Patterns'];
 
 // ============================================================
 // SKETCH FACTORY
-// tile: { cols, rows } — repeat the square composition N times
 // ============================================================
-function makeSketch({ slotId, seedValue, isMaster, maxFrames, tile }) {
+function makeSketch({ slotId, seedValue, isMaster, maxFrames }) {
   const stopAfter = maxFrames || Infinity;
-  const tileCols = (tile && tile.cols) || 1;
-  const tileRows = (tile && tile.rows) || 1;
-
   let canvasW = 0;
   let canvasH = 0;
   let frameCount = 0;
@@ -780,6 +762,7 @@ function makeSketch({ slotId, seedValue, isMaster, maxFrames, tile }) {
       p.createCanvas(canvasW, canvasH);
       p.colorMode(p.HSB, 360, 100, 100, 1);
       p.noStroke();
+      p.noLoop();
 
       const canvasEl = p.canvas;
       canvasEl.style.position = 'absolute';
@@ -793,11 +776,7 @@ function makeSketch({ slotId, seedValue, isMaster, maxFrames, tile }) {
 
       if (isMaster) {
         const sr = new SeededRandom(seedValue);
-        // Replay to know pattern + shape + effect for metadata
         const patternType = Math.floor(sr.rand() * 6);
-        // Skip: initializeGrid consumed a lot. We just read pattern.
-        // Shape + effect read fresh — they'll match because we replay
-        // in the same order below.
         features.pattern = PATTERN_NAMES[patternType];
         features.shape = '—';
         features.effect = '—';
@@ -813,33 +792,21 @@ function makeSketch({ slotId, seedValue, isMaster, maxFrames, tile }) {
         return;
       }
 
-      const tileW = canvasW / tileCols;
-      const tileH = canvasH / tileRows;
-      const tileSize = Math.min(tileW, tileH);
-
-      for (let ty = 0; ty < tileRows; ty++) {
-        for (let tx = 0; tx < tileCols; tx++) {
-          const ox = tx * tileW + (tileW - tileSize) / 2;
-          const oy = ty * tileH + (tileH - tileSize) / 2;
-
-          p.push();
-          p.translate(ox, oy);
-          drawMosaic(p, tileSize, seedValue);
-          p.pop();
-        }
-      }
-
+      // Directly draw the composition to fill the entire canvas exactly
+      drawMosaic(p, canvasW, canvasH, seedValue);
       frameCount++;
     };
   };
 
-  // ---- Draw the mosaic into a square of side `size` ----
-  function drawMosaic(p, size, seedValue) {
+  // ---- Draw the mosaic to fill the canvas ----
+  function drawMosaic(p, w, h, seedValue) {
     const sr = new SeededRandom(seedValue);
-
+    const maxDim = Math.max(w, h);
+    
     const cols = 80;
     const rows = 80;
-    const cellSize = size / cols;
+    const cellW = w / cols;
+    const cellH = h / rows;
 
     // 1. Pattern type
     const patternType = Math.floor(sr.rand() * 6);
@@ -904,7 +871,7 @@ function makeSketch({ slotId, seedValue, isMaster, maxFrames, tile }) {
     p.background(bgHue, bgSaturation, bgBrightness);
     p.drawingContext.globalAlpha = 0.15;
     p.fill(bgHue, bgSaturation, bgBrightness);
-    p.rect(0, 0, size, size);
+    p.rect(w / 2, h / 2, w, h);
     p.drawingContext.globalAlpha = 1;
 
     // 5. Render tiles
@@ -914,7 +881,9 @@ function makeSketch({ slotId, seedValue, isMaster, maxFrames, tile }) {
         if (grid[i][j] === 1) {
           const col = colors[Math.floor(sr.rand() * colors.length)];
           const sizeVar = 0.6 + sr.rand() * 0.8;
-          const renderSize = cellSize * sizeVar;
+          const renderSizeW = cellW * sizeVar;
+          const renderSizeH = cellH * sizeVar;
+          const renderSize = Math.min(renderSizeW, renderSizeH);
 
           const sVar = Math.max(40, Math.min(100, col[1] + sr.rand() * 40 - 20));
           const bVar = Math.max(40, Math.min(100, col[2] + sr.rand() * 40 - 20));
@@ -922,16 +891,16 @@ function makeSketch({ slotId, seedValue, isMaster, maxFrames, tile }) {
 
           p.fill(hueVar, sVar, bVar);
 
-          const x = i * cellSize + (cellSize - renderSize) / 2;
-          const y = j * cellSize + (cellSize - renderSize) / 2;
+          const x = i * cellW + (cellW - renderSizeW) / 2;
+          const y = j * cellH + (cellH - renderSizeH) / 2;
 
           if (shapeType === 0) {
-            p.rect(x, y, renderSize, renderSize);
+            p.rect(x, y, renderSizeW, renderSizeH);
           } else if (shapeType === 1) {
-            p.ellipse(x + renderSize / 2, y + renderSize / 2, renderSize);
+            p.ellipse(x + renderSizeW / 2, y + renderSizeH / 2, renderSize);
           } else {
             p.push();
-            p.translate(x + renderSize / 2, y + renderSize / 2);
+            p.translate(x + renderSizeW / 2, y + renderSizeH / 2);
             p.rotate(sr.rand() * Math.PI);
             p.rect(-renderSize / 2, -renderSize / 2, renderSize, renderSize);
             p.pop();
@@ -949,7 +918,7 @@ function makeSketch({ slotId, seedValue, isMaster, maxFrames, tile }) {
         for (let j = 0; j < rows; j += 2) {
           if (grid[i][j] === 1 && sr.rand() > 0.5) {
             p.fill((bgHue + sr.rand() * 120) % 360, 50, 80);
-            p.ellipse(i * cellSize + cellSize / 2, j * cellSize + cellSize / 2, cellSize * sr.rand() * 3);
+            p.ellipse(i * cellW + cellW / 2, j * cellH + cellH / 2, Math.min(cellW, cellH) * sr.rand() * 3);
           }
         }
       }
@@ -960,8 +929,8 @@ function makeSketch({ slotId, seedValue, isMaster, maxFrames, tile }) {
         for (let j = 0; j < rows - 1; j++) {
           if (grid[i][j] === 1 && grid[i + 1][j] === 1 && sr.rand() > 0.7) {
             p.line(
-              i * cellSize + cellSize / 2, j * cellSize + cellSize / 2,
-              (i + 1) * cellSize + cellSize / 2, j * cellSize + cellSize / 2
+              i * cellW + cellW / 2, j * cellH + cellH / 2,
+              (i + 1) * cellW + cellW / 2, j * cellH + cellH / 2
             );
           }
         }
@@ -972,9 +941,10 @@ function makeSketch({ slotId, seedValue, isMaster, maxFrames, tile }) {
         for (let j = 0; j < rows; j++) {
           if (grid[i][j] === 1 && sr.rand() > 0.8) {
             p.fill((bgHue + 180) % 360, 40, 90);
-            const crossSize = cellSize * 0.3;
-            p.rect(i * cellSize + cellSize / 2 - crossSize / 2, j * cellSize, crossSize, cellSize);
-            p.rect(i * cellSize, j * cellSize + cellSize / 2 - crossSize / 2, cellSize, crossSize);
+            const crossSizeW = cellW * 0.3;
+            const crossSizeH = cellH * 0.3;
+            p.rect(i * cellW + cellW / 2 - crossSizeW / 2, j * cellH, crossSizeW, cellH);
+            p.rect(i * cellW, j * cellH + cellH / 2 - crossSizeH / 2, cellW, crossSizeH);
           }
         }
       }
@@ -1038,10 +1008,10 @@ function attachVisibilityObserver(p5Instance, element) {
   obs.observe(element);
 }
 
-function createLiveP5({ slotId, seedValue, isMaster, maxFrames, tile, onCreated }) {
+function createLiveP5({ slotId, seedValue, isMaster, maxFrames, onCreated }) {
   whenSlotReady(slotId, (slot) => {
     slot.querySelectorAll('canvas').forEach(c => c.remove());
-    const inst = new p5(makeSketch({ slotId, seedValue, isMaster, maxFrames, tile }), slot);
+    const inst = new p5(makeSketch({ slotId, seedValue, isMaster, maxFrames }), slot);
     inst._frozen = false;
     attachVisibilityObserver(inst, slot);
     if (onCreated) onCreated(inst);
@@ -1057,7 +1027,6 @@ function drawPlate() {
     seedValue: seed,
     isMaster: true,
     maxFrames: 2,
-    tile: { cols: 1, rows: 1 },
     onCreated: (inst) => { plateP5 = inst; }
   });
 }
@@ -1071,7 +1040,6 @@ function drawCover() {
     seedValue: seed,
     isMaster: false,
     maxFrames: 2,
-    tile: { cols: 1, rows: 1 },
     onCreated: (inst) => { coverP5 = inst; }
   });
 }
@@ -1085,16 +1053,15 @@ function drawFramedPlate() {
     seedValue: seed,
     isMaster: false,
     maxFrames: 2,
-    tile: { cols: 1, rows: 1 },
     onCreated: (inst) => { frameP5 = inst; }
   });
 }
 
 const surfaceDefs = [
-  { id: 'surfacePrint',   wrapId: 'wrap-surfacePrint',   tile: { cols: 1, rows: 1 } },
-  { id: 'surfaceScarf',   wrapId: 'wrap-surfaceScarf',   tile: { cols: 3, rows: 1 } },
-  { id: 'surfaceTextile', wrapId: 'wrap-surfaceTextile', tile: { cols: 2, rows: 2 } },
-  { id: 'surfaceWall',    wrapId: 'wrap-surfaceWall',    tile: { cols: 1, rows: 2 } }
+  { id: 'surfacePrint',   wrapId: 'wrap-surfacePrint' },
+  { id: 'surfaceScarf',   wrapId: 'wrap-surfaceScarf' },
+  { id: 'surfaceTextile', wrapId: 'wrap-surfaceTextile' },
+  { id: 'surfaceWall',    wrapId: 'wrap-surfaceWall' }
 ];
 
 function drawSurfaces() {
@@ -1123,8 +1090,7 @@ function drawSurfaces() {
           slotId: slot.id || (slot.id = def.id + '-slot'),
           seedValue: seed,
           isMaster: false,
-          maxFrames: 2,
-          tile: def.tile
+          maxFrames: 2
         }),
         slot
       );
@@ -1196,8 +1162,7 @@ function drawArchive() {
           slotId: 'archive-slot-' + i,
           seedValue: archiveSeeds[i],
           isMaster: false,
-          maxFrames: 2,
-          tile: { cols: 1, rows: 1 }
+          maxFrames: 2
         }),
         slot
       );
